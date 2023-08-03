@@ -74,3 +74,7 @@ class RetNet(nn.Module):
             x_i = self.ffns[j](self.layer_norms_2[j](y_i)) + y_i
         
         return x_i, r_is
+    
+    @property
+    def d_output(self):
+        return self.hidden_dim

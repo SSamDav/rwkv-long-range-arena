@@ -11,7 +11,6 @@ scheduler:
 model:
     layers: 6
     hidden_dim: 256
-    vocab_size: 20
     ffn_size: 512
 
 
