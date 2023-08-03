@@ -526,7 +526,14 @@ class RWKV(nn.Module):
             self.head_q = nn.Linear(config.n_embd, config.head_qk, bias=False)
             self.head_k = nn.Linear(config.n_embd, config.head_qk, bias=False)
             self.register_buffer("copy_mask", torch.tril(torch.ones(config.ctx_len, config.ctx_len)))
-
+    
+    def _init_weights(self, module):
+        if isinstance(module, (nn.Linear)):
+            module.weight.data.normal_(mean=0.0, std=0.01)
+        if isinstance(module, (nn.Embedding)):
+            module.weight.data.normal_(mean=0.0, std=1e-5)
+        if isinstance(module, nn.Linear) and module.bias is not None:
+            module.bias.data.zero_()
 
     def forward(self, idx):
         args = self.args
