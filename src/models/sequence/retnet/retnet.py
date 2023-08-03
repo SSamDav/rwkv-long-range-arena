@@ -33,7 +33,7 @@ class RetNet(nn.Module):
             for _ in range(layers)
         ])
     
-    def forward(self, X, **kwargs):
+    def forward(self, X, state=None, **kwargs):
         """
         X: (batch_size, sequence_length, hidden_size)
         """
@@ -42,7 +42,7 @@ class RetNet(nn.Module):
            
             X = self.ffns[i](self.layer_norms_2[i](Y)) + Y
 
-        return X
+        return X, state
 
     def forward_recurrent(self, x_n, s_n_1s, n):
         """
