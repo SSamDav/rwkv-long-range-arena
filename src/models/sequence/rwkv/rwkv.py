@@ -503,29 +503,29 @@ class L2Wrap(torch.autograd.Function):
 
 
 class RWKV(pl.LightningModule):
-    def __init__(self, args):
+    def __init__(self, config):
         super().__init__()
-        self.args = args
-        if not hasattr(args, 'dim_att'):
-            args.dim_att = args.n_embd
-        if not hasattr(args, 'dim_ffn'):
-            args.dim_ffn = args.n_embd * 4
-        if not hasattr(args, 'tiny_att_layer'):
-            args.tiny_att_layer = -1
-        if not hasattr(args, 'tiny_att_dim'):
-            args.tiny_att_dim = -1
+        self.args = config
+        if not hasattr(config, 'dim_att'):
+            config.dim_att = config.n_embd
+        if not hasattr(config, 'dim_ffn'):
+            config.dim_ffn = config.n_embd * 4
+        if not hasattr(config, 'tiny_att_layer'):
+            config.tiny_att_layer = -1
+        if not hasattr(config, 'tiny_att_dim'):
+            config.tiny_att_dim = -1
 
-        self.emb = nn.Embedding(args.vocab_size, args.n_embd)
+        self.emb = nn.Embedding(config.vocab_size, config.n_embd)
 
-        self.blocks = nn.ModuleList([Block(args, i) for i in range(args.n_layer)])
+        self.blocks = nn.ModuleList([Block(config, i) for i in range(config.n_layer)])
 
-        self.ln_out = nn.LayerNorm(args.n_embd)
-        self.head = nn.Linear(args.n_embd, args.vocab_size, bias=False)
+        self.ln_out = nn.LayerNorm(config.n_embd)
+        self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
 
-        if args.head_qk > 0:
-            self.head_q = nn.Linear(args.n_embd, args.head_qk, bias=False)
-            self.head_k = nn.Linear(args.n_embd, args.head_qk, bias=False)
-            self.register_buffer("copy_mask", torch.tril(torch.ones(args.ctx_len, args.ctx_len)))
+        if config.head_qk > 0:
+            self.head_q = nn.Linear(config.n_embd, config.head_qk, bias=False)
+            self.head_k = nn.Linear(config.n_embd, config.head_qk, bias=False)
+            self.register_buffer("copy_mask", torch.tril(torch.ones(config.ctx_len, config.ctx_len)))
 
     def configure_optimizers(self):
         args = self.args
