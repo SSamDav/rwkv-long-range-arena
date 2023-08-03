@@ -12,6 +12,7 @@ model:
   config:
     n_layers: 6
     n_embd: 256
+    vocab_size: 20
 
 decoder:
   mode: pool
