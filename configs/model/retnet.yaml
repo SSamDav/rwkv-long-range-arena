@@ -1,0 +1,7 @@
+_name_: retnet
+
+layers: 6
+hidden_dim: 256
+ffn_size: 512
+heads: 4
+double_v_dim: false

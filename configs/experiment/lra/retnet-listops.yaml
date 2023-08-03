@@ -1,0 +1,33 @@
+# @package _global_
+defaults:
+  - /pipeline: listops
+  - /model: retnet
+  - override /scheduler: cosine_warmup
+
+scheduler:
+  num_training_steps: 250000 # 200 epochs
+  num_warmup_steps: 25000
+
+model:
+    layers: 6
+    hidden_dim: 256
+    vocab_size: 20
+    ffn_size: 512
+
+
+decoder:
+  mode: pool
+
+loader:
+  batch_size: 32
+
+optimizer:
+  lr: 0.004
+  weight_decay: 0.05
+
+trainer:
+  max_epochs: 100
+
+train:
+  seed: 3333
+  interval: step
