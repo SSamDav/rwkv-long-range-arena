@@ -33,7 +33,7 @@ class RetNet(nn.Module):
             for _ in range(layers)
         ])
     
-    def forward(self, X):
+    def forward(self, X, **kwargs):
         """
         X: (batch_size, sequence_length, hidden_size)
         """
