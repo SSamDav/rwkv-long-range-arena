@@ -10,10 +10,10 @@ scheduler:
 
 model:
   config:
-    n_layers: 6
+    n_layer: 6
     n_embd: 256
     vocab_size: 20
-    ctx_len: 1024
+    ctx_len: 2048
     dim_att: 256 # n_embd
     dim_ffn: 1024 # n_embd * 4
 
