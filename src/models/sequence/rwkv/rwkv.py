@@ -15,12 +15,20 @@ if importlib.util.find_spec('deepspeed'):
     import deepspeed
     from deepspeed.ops.adam import DeepSpeedCPUAdam, FusedAdam
 
+import logging
+from types import SimpleNamespace
+
 # from deepspeed.runtime.fp16.onebit.zoadam import ZeroOneAdam
 
 try:
     print('RWKV_MY_TESTING', os.environ["RWKV_MY_TESTING"])
 except:
     os.environ["RWKV_MY_TESTING"] = ''
+
+logger = logging.getLogger(__name__)
+
+RWKV_HEAD_QK_DIM = 0
+
 
 def __nop(ob):
     return ob
@@ -485,6 +493,63 @@ class Block(nn.Module):
         return x
 
 
+def RWKV_Init(model, args):  # fancy initialization of all lin & emb layer in the model
+    print("\n[--> first run, init model params (very slow for large models) <--]")
+    print("[so you shall only do it for 1 single GPU and save the checkpt and load it when using multiple GPU]\n")
+
+    for mm in model.modules():
+        if "RecursiveScriptModule" in str(type(mm)):
+            if mm.original_name not in ["Linear"]:
+                continue
+            ww = None
+            for name, param in mm.named_parameters():
+                if name == "weight":
+                    ww = param
+        else:
+            m = mm
+            if not isinstance(m, (nn.Linear, nn.Embedding)):
+                continue
+            ww = m.weight
+        with torch.no_grad():
+            name = "[unknown weight]"
+            for name, parameter in model.named_parameters():  # find the name of the weight
+                if id(ww) == id(parameter):
+                    break
+
+            shape = ww.shape
+            gain = 1.0
+            scale = 1.0  # extra scale for gain
+
+            if isinstance(m, nn.Embedding):
+                gain = math.sqrt(max(shape[0], shape[1]))
+                if shape[0] == args.vocab_size and shape[1] == args.n_embd:  # token emb?
+                    scale = 1e-4
+                else:
+                    scale = 0
+
+            if isinstance(m, nn.Linear):
+                if shape[0] > shape[1]:
+                    gain = math.sqrt(shape[0] / shape[1])
+                if shape[0] == args.vocab_size and shape[1] == args.n_embd:  # final projection?
+                    scale = 0.5
+
+            if hasattr(m, "scale_init"):
+                scale = m.scale_init
+
+            # print(f"{str(shape[0]).ljust(5)} {str(shape[1]).ljust(5)} {str(scale).ljust(4)} {name}")
+
+            gain *= scale
+            if scale == -999:
+                nn.init.eye_(ww)
+            elif gain == 0:
+                # zero init is great for some RWKV matrices
+                nn.init.zeros_(ww)
+            elif gain > 0:
+                nn.init.orthogonal_(ww, gain=gain)
+            else:
+                nn.init.normal_(ww, mean=0.0, std=-scale)
+
+
 class L2Wrap(torch.autograd.Function):
     @staticmethod
     def forward(ctx, loss, y):
@@ -500,33 +565,47 @@ class L2Wrap(torch.autograd.Function):
         gy = torch.zeros_like(y)
         gy.scatter_(-1, ids, maxx * factor)
         return (grad_output, gy)
-
+    
 
 class RWKV(nn.Module):
     def __init__(self, config):
         super().__init__()
-        self.args = config
-        if not hasattr(config, 'dim_att'):
-            config.dim_att = config.n_embd
-        if not hasattr(config, 'dim_ffn'):
-            config.dim_ffn = config.n_embd * 4
-        if not hasattr(config, 'tiny_att_layer'):
-            config.tiny_att_layer = -1
-        if not hasattr(config, 'tiny_att_dim'):
-            config.tiny_att_dim = -1
+        self.step = 0
+        if type(config) is dict:
+            config = SimpleNamespace(**config)
+        self.config = config
 
-        self.emb = nn.Embedding(config.vocab_size, config.n_embd)
-
-        self.blocks = nn.ModuleList([Block(config, i) for i in range(config.n_layer)])
+        # self.emb = nn.Embedding(config.vocab_size, config.n_embd)
+        self.d_model = self.config.n_embd
+        self.blocks = nn.ModuleList([Block(config, i)
+                                    for i in range(config.n_layer)])
 
         self.ln_out = nn.LayerNorm(config.n_embd)
-        self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        #self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        # self.head = nn.Linear(config.n_embd, config.n_embd , bias=False)
 
-        if config.head_qk > 0:
-            self.head_q = nn.Linear(config.n_embd, config.head_qk, bias=False)
-            self.head_k = nn.Linear(config.n_embd, config.head_qk, bias=False)
-            self.register_buffer("copy_mask", torch.tril(torch.ones(config.ctx_len, config.ctx_len)))
-    
+        if RWKV_HEAD_QK_DIM > 0:
+            self.head_q = nn.Linear(config.n_embd, RWKV_HEAD_QK_DIM, bias=False)
+            self.head_q.scale_init = 0
+            self.head_k = nn.Linear(config.n_embd, RWKV_HEAD_QK_DIM, bias=False)
+            self.head_k.scale_init = 0.1
+            self.register_buffer("copy_mask", torch.tril(
+                torch.ones(config.ctx_len, config.ctx_len)))
+
+        # self.ctx_len = config.ctx_len
+
+        try:
+            if os.environ['RWKV_LOAD_MODEL'] == str(False):
+                RWKV_Init(self, config) 
+        except:
+            pass
+
+        logger.info("number of parameters: %e", sum(p.numel()
+                    for p in self.parameters()))
+
+    # def get_ctx_len(self):
+        # return self.ctx_len
+
     def _init_weights(self, module):
         if isinstance(module, (nn.Linear)):
             module.weight.data.normal_(mean=0.0, std=0.01)
@@ -535,44 +614,111 @@ class RWKV(nn.Module):
         if isinstance(module, nn.Linear) and module.bias is not None:
             module.bias.data.zero_()
 
-    def forward(self, idx):
-        args = self.args
-        B, T = idx.size()
-        assert T <= args.ctx_len, "Cannot forward, model ctx_len is exhausted."
+    def forward(self, x, state=None, **kwargs):
+        #        idx = idx.to(self.emb.weight.device)
 
-        x = self.emb(idx)
-        x_emb = x
-
-        if args.tiny_att_dim > 0:
-            for block in self.blocks:
-                if args.grad_cp == 1:
-                    x = deepspeed.checkpointing.checkpoint(block, x, x_emb)
-                else:
-                    x = block(x, x_emb)
-        else:
-            for block in self.blocks:
-                if args.grad_cp == 1:
-                    x = deepspeed.checkpointing.checkpoint(block, x)
-                else:
-                    x = block(x)
-
+        self.step += 1
+        # B, T = idx.size()
+        # __import__('remote_pdb').set_trace()
+        for block in self.blocks:
+            x = block(x)
         x = self.ln_out(x)
 
-        if args.head_qk > 0:
-            q = self.head_q(x)[:, :T, :]
-            k = self.head_k(x)[:, :T, :]
-            c = (q @ k.transpose(-2, -1)) * (1.0 / args.head_qk)
-            c = c.masked_fill(self.copy_mask[:T, :T] == 0, 0)
+        # if RWKV_HEAD_QK_DIM > 0:
+        #     q = self.head_q(x)[:, :T, :]
+        #     k = self.head_k(x)[:, :T, :]
+        #     c = (q @ k.transpose(-2, -1)) * (1.0 / RWKV_HEAD_QK_DIM)
+        #     c = c.masked_fill(self.copy_mask[:T, :T] == 0, 0)
+            
+        #     if '32' in os.environ['RWKV_FLOAT_MODE']:
+        #         c = c @ F.one_hot(idx, num_classes=self.config.vocab_size)
+        #     elif os.environ['RWKV_FLOAT_MODE'] == 'fp16':
+        #         c = c @ F.one_hot(idx, num_classes=self.config.vocab_size).half()
+        #     elif os.environ['RWKV_FLOAT_MODE'] == 'bf16':
+        #         c = c @ F.one_hot(idx, num_classes=self.config.vocab_size).bfloat16()
 
-            if "32" in os.environ["RWKV_FLOAT_MODE"]:
-                c = c @ F.one_hot(idx, num_classes=args.vocab_size)
-            elif os.environ["RWKV_FLOAT_MODE"] == "fp16":
-                c = c @ F.one_hot(idx, num_classes=args.vocab_size).half()
-            elif os.environ["RWKV_FLOAT_MODE"] == "bf16":
-                c = c @ F.one_hot(idx, num_classes=args.vocab_size).bfloat16()
+        return x, state
+        #return L2Wrap.apply(loss, x)
 
-            x = self.head(x) + c
-        else:
-            x = self.head(x)
+    @property
+    def d_state(self):
+        return self.n_layers * self.d_model
 
-        return x
+    @property
+    def d_output(self):
+        return self.d_model
+
+# class RWKV(nn.Module):
+#     def __init__(self, config):
+#         super().__init__()
+#         self.args = config
+#         if not hasattr(config, 'dim_att'):
+#             config.dim_att = config.n_embd
+#         if not hasattr(config, 'dim_ffn'):
+#             config.dim_ffn = config.n_embd * 4
+#         if not hasattr(config, 'tiny_att_layer'):
+#             config.tiny_att_layer = -1
+#         if not hasattr(config, 'tiny_att_dim'):
+#             config.tiny_att_dim = -1
+
+#         self.emb = nn.Embedding(config.vocab_size, config.n_embd)
+
+#         self.blocks = nn.ModuleList([Block(config, i) for i in range(config.n_layer)])
+
+#         self.ln_out = nn.LayerNorm(config.n_embd)
+#         self.head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+
+#         if config.head_qk > 0:
+#             self.head_q = nn.Linear(config.n_embd, config.head_qk, bias=False)
+#             self.head_k = nn.Linear(config.n_embd, config.head_qk, bias=False)
+#             self.register_buffer("copy_mask", torch.tril(torch.ones(config.ctx_len, config.ctx_len)))
+    
+#     def _init_weights(self, module):
+#         if isinstance(module, (nn.Linear)):
+#             module.weight.data.normal_(mean=0.0, std=0.01)
+#         if isinstance(module, (nn.Embedding)):
+#             module.weight.data.normal_(mean=0.0, std=1e-5)
+#         if isinstance(module, nn.Linear) and module.bias is not None:
+#             module.bias.data.zero_()
+
+#     def forward(self, idx):
+#         args = self.args
+#         B, T = idx.size()
+#         assert T <= args.ctx_len, "Cannot forward, model ctx_len is exhausted."
+
+#         x = self.emb(idx)
+#         x_emb = x
+
+#         if args.tiny_att_dim > 0:
+#             for block in self.blocks:
+#                 if args.grad_cp == 1:
+#                     x = deepspeed.checkpointing.checkpoint(block, x, x_emb)
+#                 else:
+#                     x = block(x, x_emb)
+#         else:
+#             for block in self.blocks:
+#                 if args.grad_cp == 1:
+#                     x = deepspeed.checkpointing.checkpoint(block, x)
+#                 else:
+#                     x = block(x)
+
+#         x = self.ln_out(x)
+
+#         if args.head_qk > 0:
+#             q = self.head_q(x)[:, :T, :]
+#             k = self.head_k(x)[:, :T, :]
+#             c = (q @ k.transpose(-2, -1)) * (1.0 / args.head_qk)
+#             c = c.masked_fill(self.copy_mask[:T, :T] == 0, 0)
+
+#             if "32" in os.environ["RWKV_FLOAT_MODE"]:
+#                 c = c @ F.one_hot(idx, num_classes=args.vocab_size)
+#             elif os.environ["RWKV_FLOAT_MODE"] == "fp16":
+#                 c = c @ F.one_hot(idx, num_classes=args.vocab_size).half()
+#             elif os.environ["RWKV_FLOAT_MODE"] == "bf16":
+#                 c = c @ F.one_hot(idx, num_classes=args.vocab_size).bfloat16()
+
+#             x = self.head(x) + c
+#         else:
+#             x = self.head(x)
+
+#         return x
