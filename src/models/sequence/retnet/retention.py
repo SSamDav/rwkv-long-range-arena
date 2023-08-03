@@ -101,8 +101,8 @@ class SimpleRetention(nn.Module):
         return inner_chunk + cross_chunk, r_i
 
     def _get_D(self, sequence_length):
-        n = torch.arange(sequence_length).unsqueeze(1)
-        m = torch.arange(sequence_length).unsqueeze(0)
+        n = torch.arange(sequence_length, device=self.W_Q.device).unsqueeze(1)
+        m = torch.arange(sequence_length, device=self.W_Q.device).unsqueeze(0)
 
         # Broadcast self.gamma ** (n - m) with appropriate masking to set values where n < m to 0
         D = (self.gamma ** (n - m)) * (n >= m).float()  #this results in some NaN when n is much larger than m
