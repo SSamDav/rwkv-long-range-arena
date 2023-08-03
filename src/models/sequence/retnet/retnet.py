@@ -78,3 +78,7 @@ class RetNet(nn.Module):
     @property
     def d_output(self):
         return self.hidden_dim
+    
+    @property
+    def d_model(self):
+        return self.hidden_dim
