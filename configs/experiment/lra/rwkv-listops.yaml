@@ -13,6 +13,7 @@ model:
     n_layers: 6
     n_embd: 256
     vocab_size: 20
+    ctx_len: 1024
 
 decoder:
   mode: pool
