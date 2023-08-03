@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from src.models.retnet.retention import MultiScaleRetention
+from src.models.sequence.retnet.retention import MultiScaleRetention
 
 class RetNet(nn.Module):
     def __init__(self, layers, hidden_dim, ffn_size, heads, double_v_dim=False):
