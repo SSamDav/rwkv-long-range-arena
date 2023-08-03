@@ -36,7 +36,7 @@ model = {
     "model":                 "src.models.sequence.backbones.model.SequenceModel",
     "unet":                  "src.models.sequence.backbones.unet.SequenceUNet",
     "rwkv":                  "src.models.sequence.RWKV",
-    "retnet":                "src.models.sequence.retnet.retnet.RetNet",
+    "retnet":                "src.models.sequence.RetNet",
     "sashimi":               "src.models.sequence.backbones.sashimi.Sashimi",
     "sashimi_standalone":    "models.sashimi.sashimi.Sashimi",
     # Baseline RNNs
