@@ -5,8 +5,8 @@ defaults:
   - override /scheduler: cosine_warmup
 
 scheduler:
-  num_training_steps: 250000 # 200 epochs
-  num_warmup_steps: 25000
+  num_training_steps: 125000 # 200 epochs
+  num_warmup_steps: 12500
 
 model:
     layers: 6
@@ -26,7 +26,7 @@ optimizer:
   weight_decay: 0.05
 
 trainer:
-  max_epochs: 100
+  max_epochs: 50
 
 train:
   seed: 3333
