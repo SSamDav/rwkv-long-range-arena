@@ -5,8 +5,8 @@ defaults:
   - override /scheduler: cosine_warmup
 
 scheduler:
-  num_training_steps: 125000 # 200 epochs
-  num_warmup_steps: 12500
+  num_training_steps: 19450 # 50 epochs
+  num_warmup_steps: 1945
 
 model:
     layers: 6
