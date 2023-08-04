@@ -21,8 +21,8 @@ loader:
   batch_size: 32
 
 optimizer:
-  lr: 0.004
-  weight_decay: 0.05
+  lr: 0.001
+  weight_decay: 0.01
 
 trainer:
   max_epochs: 50
