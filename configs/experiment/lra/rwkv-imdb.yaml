@@ -12,9 +12,10 @@ model:
     n_layer: 6
     n_embd: 128
     vocab_size: 257
-    ctx_len: 4096
-    dim_att: 128 
-    dim_ffn: 512 
+    # only for rwkv v5
+    # ctx_len: 4096
+    # dim_att: 128 
+    # dim_ffn: 512 
 
 loader:
   batch_size: 32
