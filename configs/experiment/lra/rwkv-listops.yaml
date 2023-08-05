@@ -15,7 +15,7 @@ model:
     vocab_size: 20
     ctx_len: 2048
     dim_att: 256 # n_embd
-    dim_ffn: 512 # n_embd * 4
+    dim_ffn: 1024 # n_embd * 4
 
 
 decoder:
@@ -25,8 +25,8 @@ loader:
   batch_size: 32
 
 optimizer:
-  lr: 0.001
-  weight_decay: 0.01
+  lr: 0.004
+  weight_decay: 0.05
 
 trainer:
   max_epochs: 50
