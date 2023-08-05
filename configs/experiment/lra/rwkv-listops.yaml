@@ -5,8 +5,8 @@ defaults:
   - override /scheduler: cosine_warmup
 
 scheduler:
-  num_training_steps: 19450 # 100 epochs = 388 batches per gpu
-  num_warmup_steps: 1945
+  num_training_steps: 39000 # 50 epochs = 780 batches per gpu
+  num_warmup_steps: 3900
 
 model:
   config:

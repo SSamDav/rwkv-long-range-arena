@@ -27,3 +27,4 @@ scikit-learn # Impedance
 numba # Impedance
 gluonts # Monash
 timm==0.5.4 # ImageNet
+ninja
