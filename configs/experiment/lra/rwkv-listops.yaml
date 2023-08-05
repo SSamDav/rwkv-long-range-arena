@@ -5,17 +5,18 @@ defaults:
   - override /scheduler: cosine_warmup
 
 scheduler:
-  num_training_steps: 39000 # 50 epochs = 780 batches per gpu
-  num_warmup_steps: 3900
+  num_training_steps: 39000 # 780 steps per epoch -> 32 batch size 4 gpus
+  num_warmup_steps: 7800
 
 model:
   config:
     n_layer: 6
     n_embd: 256
     vocab_size: 20
-    ctx_len: 2048
-    dim_att: 256 # n_embd
-    dim_ffn: 1024 # n_embd * 4
+    # only for rwkv v5
+    # ctx_len: 2048
+    # dim_att: 256 # n_embd
+    # dim_ffn: 1024 # n_embd * 4
 
 
 decoder:

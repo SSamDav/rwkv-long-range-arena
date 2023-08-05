@@ -14,17 +14,17 @@ model:
     vocab_size: 257
     ctx_len: 4096
     dim_att: 128 
-    dim_ffn: 256 
+    dim_ffn: 512 
 
 loader:
   batch_size: 32
 
 optimizer:
-  lr: 0.01
+  lr: 0.004
   weight_decay: 0.05
 
 scheduler:
-  num_training_steps: 39000 # 20 epochs
+  num_training_steps: 39000 # 390 steps per epoch -> 32 batch size 4 gpus
   num_warmup_steps: 3900
 
 trainer:
