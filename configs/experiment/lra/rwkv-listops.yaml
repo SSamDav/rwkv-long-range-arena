@@ -5,8 +5,8 @@ defaults:
   - override /scheduler: cosine_warmup
 
 scheduler:
-  num_training_steps: 19500 # 780 steps per epoch -> 32 batch size 4 gpus
-  num_warmup_steps: 1950
+  num_training_steps: 39000 # 780 steps per epoch -> 32 batch size 4 gpus
+  num_warmup_steps: 3900
 
 model:
   config:
@@ -27,7 +27,7 @@ loader:
   batch_size: 32
 
 optimizer:
-  lr: 0.001
+  lr: 0.004
   weight_decay: 0.05
 
 trainer: 
