@@ -442,15 +442,30 @@ class Block(nn.Module):
                 self.att = RWKV_TimeMix(config, layer_id)
                 
         self.ffn = RWKV_ChannelMix(config, layer_id)
+        if config.dropout > 0:
+            self.drop0 = nn.Dropout(p = config.dropout)
+            self.drop1 = nn.Dropout(p = config.dropout)
 
     def forward(self, x):
+
         if self.layer_id == 0:
             x = self.ln0(x)        
-        if self.layer_id == 0 and self.config.model_type == 'RWKV-ffnPre':
-            x = x + self.ffnPre(self.ln1(x))  # better in some cases
-        else:
-            x = x + self.att(self.ln1(x))
-        x = x + self.ffn(self.ln2(x))
+
+        if self.config.dropout == 0:
+            if self.layer_id == 0 and self.config.model_type == 'RWKV-ffnPre':
+                x = x + self.ffnPre(self.ln1(x))  # better in some cases
+            else:
+                x = x + self.att(self.ln1(x))
+            x = x + self.ffn(self.ln2(x))
+
+        else: 
+            if self.layer_id == 0 and self.config.model_type == 'RWKV-ffnPre':
+                x = self.drop0(x + self.ffnPre(self.ln1(x)))  # better in some cases
+            else:
+                x = self.drop0(x + self.att(self.ln1(x)))
+            
+            x = self.drop1(x + self.ffn(self.ln2(x)))
+
         return x
 
 
@@ -478,6 +493,9 @@ class RWKV(nn.Module):
             self.head_k.scale_init = 0.1
             self.register_buffer("copy_mask", torch.tril(
                 torch.ones(config.ctx_len, config.ctx_len)))
+            
+        if config.dropout > 0:
+            self.drop0 = nn.Dropout(p = config.dropout)
 
         # self.ctx_len = config.ctx_len
 
@@ -507,6 +525,9 @@ class RWKV(nn.Module):
         self.step += 1
         # B, T = idx.size()
         # __import__('remote_pdb').set_trace()
+        if self.config.dropout > 0:
+            x = self.drop0(x)
+
         for block in self.blocks:
             x = block(x)
         x = self.ln_out(x)
